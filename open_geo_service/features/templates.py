@@ -263,6 +263,24 @@ def _validate_feature_template(template: object, *, source: str) -> None:
             "declare it without padding"
         )
 
+    monthly_map = template.get("monthly_map")
+    if monthly_map is not None:
+        if not isinstance(monthly_map, dict):
+            raise ValueError(f"monthly_map in {source} must be a mapping")
+        breaks = monthly_map.get("breaks")
+        if not isinstance(breaks, list) or not 1 <= len(breaks) <= 8:
+            raise ValueError(f"monthly_map in {source} requires one to eight colour breaks")
+        previous = float("-inf")
+        for stop in breaks:
+            if isinstance(stop, bool) or not isinstance(stop, (int, float)) or not previous < stop < float("inf"):
+                raise ValueError(f"monthly_map in {source} requires increasing finite colour breaks")
+            previous = stop
+        if not isinstance(monthly_map.get("units"), str) or not monthly_map["units"].strip():
+            raise ValueError(f"monthly_map in {source} requires units")
+        notes = monthly_map.get("notes", {})
+        if not isinstance(notes, dict) or not all(isinstance(k, str) and isinstance(v, str) for k, v in notes.items()):
+            raise ValueError(f"monthly_map notes in {source} must map year strings to text")
+
     provider = template.get("provider")
     if provider is not None:
         if not isinstance(provider, str) or not provider.strip():

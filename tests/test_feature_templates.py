@@ -48,6 +48,16 @@ def test_a_valid_template_loads() -> None:
 @pytest.mark.parametrize(
     ("overrides", "expected"),
     [
+        pytest.param({"monthly_map": []}, "must be a mapping", id="monthly_map_type"),
+        pytest.param({"monthly_map": {"breaks": []}}, "one to eight", id="monthly_map_empty"),
+        pytest.param({"monthly_map": {"breaks": [10, 5]}}, "increasing finite", id="monthly_map_unsorted"),
+        pytest.param({"monthly_map": {"breaks": [float("nan")]}}, "increasing finite", id="monthly_map_nan"),
+        pytest.param({"monthly_map": {"breaks": [5], "units": ""}}, "requires units", id="monthly_map_units"),
+        pytest.param(
+            {"monthly_map": {"breaks": [5], "units": "cases", "notes": {2013: "Adjusted"}}},
+            "year strings",
+            id="monthly_map_notes",
+        ),
         pytest.param({"id": None}, "missing or invalid id", id="no_id"),
         pytest.param({"id": ""}, "missing or invalid id", id="blank_id"),
         pytest.param({"id": "a/b"}, "cannot be used in a URL", id="unsafe_id"),

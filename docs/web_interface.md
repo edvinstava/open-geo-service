@@ -446,3 +446,10 @@ or integrating with other systems — use the REST API directly. The management 
 one-to-one onto the `POST /ingestions` and `POST /sync/{dataset_id}` endpoints documented
 in the [API reference](managed_data_api_guide.md). To read and analyse published data, see
 [Accessing data](user_guide.md).
+
+A polygon data source can opt into a monthly count map by storing one numeric property per
+calendar month (named `YYYY-MM`) and declaring `monthly_map` in its vector template.
+For example, `monthly_map: {units: cases, breaks: [5000, 10000, 20000, 40000]}` sets a
+shared colour scale. Optional `notes` maps quoted years to review notes. The selected month
+sets the fill and click value, missing values are grey, and the link retains the month.
+See the Malawi case source in `examples/malawi_chap/plugins/vectors/`.

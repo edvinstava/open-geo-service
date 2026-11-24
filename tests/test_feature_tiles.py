@@ -164,10 +164,13 @@ def test_the_archive_is_linked_for_web_map_clients(client: TestClient) -> None:
     assert "https://stac-extensions.github.io/web-map-links/v1.3.0/schema.json" in collection["stac_extensions"]
 
 
+@pytest.mark.parametrize("monthly", [False, True])
 def test_the_style_draws_the_tiles_with_the_collections_attribution(
-    client: TestClient, monkeypatch: pytest.MonkeyPatch
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, monthly: bool
 ) -> None:
-    template = {**TEMPLATE, "providers": [{"name": "Overture Maps"}]}
+    template: dict[str, Any] = {**TEMPLATE, "providers": [{"name": "Overture Maps"}]}
+    if monthly:
+        template["monthly_map"] = {"units": "cases", "breaks": [5000, 10000]}
     monkeypatch.setattr(feature_services.feature_templates, "get_feature_template", lambda _id: template)
     feature_services.refresh_feature_collection(
         template=template,
@@ -181,6 +184,7 @@ def test_the_style_draws_the_tiles_with_the_collections_attribution(
     response = client.get("/features/districts/styles/default.json")
     assert response.headers["content-type"] == tiles.STYLE_MEDIA_TYPE
     style = response.json()
+    assert style.get("metadata", {}).get("ogs:monthly_map") == template.get("monthly_map")
     assert style["version"] == 8 and style["name"] == "District boundaries"
     assert style["sources"] == {
         "features": {

@@ -1,0 +1,20 @@
+- id: mwi_malaria_monthly
+  name: Malawi monthly malaria cases
+  description: Confirmed outpatient cases by district, January 2005 to December 2023. The source covers 27 of 28 districts. Likoma has no case series. Fractional counts reflect the authors' processing. Fetch checks the latest Zenodo release and both input file checksums.
+  provider: malawi_malaria_monthly
+  id_property: id
+  license:
+    name: Cases CC BY 4.0 and boundaries CC BY 3.0 IGO
+    url: https://zenodo.org/records/17161438
+  attribution: Cases © Elling et al. (CC BY 4.0). Districts © NSO Malawi / OCHA ROSEA via geoBoundaries (CC BY 3.0 IGO).
+  source_url: https://zenodo.org/records/17161438
+  providers:
+    - name: Elling et al.
+      roles: [producer]
+      url: https://zenodo.org/records/17161438
+  monthly_map:
+    units: cases
+    breaks: [5000, 10000, 20000, 40000]
+    notes:
+      '2013': Authors adjusted this year's counts for underreporting.
+      '2014': Authors adjusted this year's counts for underreporting.

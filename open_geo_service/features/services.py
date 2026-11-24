@@ -557,7 +557,10 @@ def published_collection_style_or_404(collection_id: str, tiles_url: str) -> dic
     published_collection_tiles_or_404(collection_id)
     record = ingestion_services.stac_eligible_artifacts_by_dataset()[collection_id]
     template = feature_templates.get_feature_template(record.dataset_id) or {}
-    return tiles.style(record.dataset_name, tiles_url, _feature_attribution(template))
+    style = tiles.style(record.dataset_name, tiles_url, _feature_attribution(template))
+    if monthly_map := template.get("monthly_map"):
+        style["metadata"] = {"ogs:monthly_map": monthly_map}
+    return style
 
 
 def _build_record(collection_id: str, record: ArtifactRecord, template: dict[str, Any]) -> FeatureCollectionRecord:

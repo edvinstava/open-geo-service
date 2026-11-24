@@ -885,8 +885,10 @@
       const FEATURE_SOURCE = "features";
       const FEATURE_LAYERS = ["features-fill", "features-line", "features-point"];
       let featurePopup = null;
+      let selectedMonth = null;
 
       function clearFeatures() {
+        selectedMonth = null;
         if (!map) return;
         for (const id of FEATURE_LAYERS) {
           if (map.getLayer(id)) map.removeLayer(id);
@@ -953,6 +955,58 @@
         const count = record?.feature_count;
         const counted = count == null ? "" : `${count} feature${count === 1 ? "" : "s"}. `;
         setStatus(`${counted}Click one to see its name.`);
+        if (style.metadata?.["ogs:monthly_map"]) showMonthlyFeatures(collection, record, style.metadata["ogs:monthly_map"]);
+      }
+
+      // Monthly columns belong to the feature itself, so changing period changes only the paint.
+      function showMonthlyFeatures(collection, record, config) {
+        const months = (collection["table:columns"] ?? []).map(c => c.name)
+          .filter(name => /^\d{4}-(0[1-9]|1[0-2])$/.test(name)).sort();
+        if (!months.length) {
+          setStatus("This collection has no monthly values.", true);
+          return;
+        }
+        const label = document.createElement("label");
+        label.htmlFor = "feature-month";
+        label.textContent = "Month";
+        const select = document.createElement("select");
+        select.id = label.htmlFor;
+        for (const month of months) select.add(new Option(month, month));
+        const requested = new URLSearchParams(location.search).get("month");
+        select.value = months.includes(requested) ? requested : months.at(-1);
+        const note = document.createElement("p");
+        note.setAttribute("aria-live", "polite");
+        const colors = chroma.scale("OrRd").colors(config.breaks.length + 1);
+        function draw() {
+          const month = select.value;
+          selectedMonth = { month, units: config.units };
+          featurePopup?.remove();
+          const stops = config.breaks.flatMap((value, i) => [value, colors[i + 1]]);
+          map.setPaintProperty("features-fill", "fill-color", ["case", ["==", ["typeof", ["get", month]], "number"],
+            ["step", ["number", ["get", month]], colors[0], ...stops], "#b0b7bd"]);
+          map.setPaintProperty("features-fill", "fill-opacity", 0.9);
+          note.textContent = config.notes?.[month.slice(0, 4)] ?? "";
+          note.hidden = !note.textContent;
+        }
+        select.addEventListener("change", () => {
+          draw();
+          const url = new URL(location.href);
+          url.searchParams.set("month", select.value);
+          history.replaceState(null, "", url);
+        });
+        const refreshed = document.createElement("small");
+        if (record?.last_updated) refreshed.textContent = "Last successful refresh: " + record.last_updated.slice(0, 10) + " UTC";
+        const coverage = document.createElement("p");
+        coverage.textContent = "Observations: " + months[0] + " to " + months.at(-1);
+        dimControls.replaceChildren(label, select, coverage, refreshed, note);
+        dimControls.classList.remove("hidden");
+        draw();
+        showUnits(config.units);
+        const breaks = config.breaks.map(value => value.toLocaleString());
+        const labels = ["< " + breaks[0], ...breaks.slice(1).map((value, i) => breaks[i] + " – < " + value),
+          "≥ " + breaks.at(-1), "No data"];
+        updateClassLegend(labels.map(name => ({name})), [...colors, "#b0b7bd"]);
+        setStatus("Click a district to see its value for the selected month.");
       }
 
       // Without a close button, a click elsewhere on the map (MapLibre's default) or Escape closes it.
@@ -961,7 +1015,15 @@
       });
 
       function showFeatureName(event) {
-        const label = featureLabel(event.features?.[0]?.properties ?? {});
+        const properties = event.features?.[0]?.properties ?? {};
+        let label = featureLabel(properties);
+        if (selectedMonth) {
+          const value = properties[selectedMonth.month];
+          const text = Number.isFinite(value)
+            ? value.toLocaleString(undefined, {maximumFractionDigits: 20}) + " " + selectedMonth.units
+            : "No data";
+          label += " · " + selectedMonth.month + " · " + text;
+        }
         featurePopup?.remove();
         if (!label) return;
         featurePopup = new maplibregl.Popup({ className: "feature-popup", closeButton: false, offset: 6 })
@@ -981,6 +1043,7 @@
       function reflectSelection() {
         const id = selectedDatasetId();
         const url = new URL(window.location.href);
+        if (id !== url.searchParams.get("dataset")) url.searchParams.delete("month");
         if (id) url.searchParams.set("dataset", id);
         else url.searchParams.delete("dataset");
         history.replaceState(null, "", url);
