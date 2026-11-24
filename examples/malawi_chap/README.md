@@ -6,6 +6,71 @@ CSV / GeoJSON / data-dictionary arrangement as the dengue datasets in
 The build step produces files; the separate importer below loads them into DHIS2.
 Neither command publishes to the data repository.
 
+## Expanded environmental CSV
+
+`enrich.py` adds 35 columns to an existing, checksum-verified bundle, keeping all
+6,156 district-month rows and every original value. It writes a separate bundle.
+An existing CSV with monthly-derived humidity keeps that method; enrichment does
+not claim to have completed the blocked hourly-derived humidity rebuild.
+
+```bash
+uv run --all-extras --with earthengine-api==1.7.49 \
+  python -m examples.malawi_chap.enrich \
+  --bundle /absolute/path/to/existing/output \
+  --work-dir /absolute/path/to/new/expanded-work
+```
+
+The script starts an isolated GeoService on port 9003 (`--port` overrides it) for
+CHIRPS3 ingestion and district aggregation. The other raster sources are reduced
+directly in Earth Engine, using the same district polygons and each source's
+native grid. These alternatives use the existing Earth Engine service account;
+they do not need EDH or CDSE keys. They do not appear as GeoService raster stores.
+NOAA supplies a single monthly index table. Requests run sequentially, annual
+batches keep Earth Engine calls small, and public responses are cached by the
+exact computation. Use a new work directory to request fresh upstream results.
+
+| Additional columns | Source and interpretation |
+| --- | --- |
+| `rainfall_chirps3` | Built-in CHIRPS3 monthly, 5 km. GeoService stores mm/day; multiplied by calendar days to produce mm/month. Kept alongside ERA5-Land rainfall for comparison. |
+| `monthly_min_temperature`, `monthly_max_temperature` | ERA5-Land monthly pixel extrema, then district means in Celsius. These are not averages of daily minima/maxima. |
+| `mean_dewpoint_temperature`, `mean_soil_temperature_0_7cm` | ERA5-Land monthly means in Celsius. |
+| `soil_moisture_0_7cm`, `soil_moisture_7_28cm`, `soil_moisture_28_100cm` | ERA5-Land volumetric water fractions at three depths. |
+| `surface_runoff_mm`, `evaporation_mm`, `solar_radiation_mj_m2` | ERA5-Land monthly accumulations. Evaporation is sign-reversed so positive means water loss; negative condensation is retained. The known swapped evaporation-component bands are not used. |
+| `eastward_wind_10m`, `northward_wind_10m` | ERA5-Land monthly mean wind components in m/s, not mean wind speed. |
+| `leaf_area_index_low_vegetation`, `leaf_area_index_high_vegetation` | ERA5-Land monthly leaf-area indices. |
+| `ndvi`, `evi`, `vegetation_good_quality_fraction` | MOD13A3.061 monthly vegetation at 1 km. Indices use only SummaryQA=0 and valid scaled values; the fraction reports source quality. This is a different product from the built-in CLMS NDVI. |
+| `mean_elevation_m`, `mean_slope_degrees` | SRTM 30 m, February 2000, static values repeated across months. A different source from the built-in Copernicus DEM. |
+| `forest_fraction`, `shrubland_fraction`, `savanna_fraction`, `grassland_fraction`, `wetland_fraction`, `cropland_or_mosaic_fraction`, `urban_fraction`, `bare_land_fraction`, `landcover_water_fraction` | MODIS MCD12Q1.061 annual IGBP classes at 500 m, repeated monthly. Fractions refer to classified pixels; cropland includes mixed cropland/natural-vegetation mosaics. This is a different classification from ESA CCI land cover. |
+| `seasonal_water_detected_fraction`, `permanent_water_detected_fraction`, `water_classified_fraction` | JRC annual water detections as fractions of the entire district grid, 30 m, repeated monthly. Coverage separately reports the classified share, which can be tiny. Unclassified pixels contribute no detections; this is not evidence of dry land. No classified pixels means blank water fractions. Original history through 2015, corrected v1.5 for 2016-2021, and v1.5 Landsat Collection 2 for 2022-2023. Version changes may introduce artefacts. |
+| `nino34_anomaly` | NOAA CPC ERSSTv5 monthly Niño 3.4 anomaly against 1991-2020, in Celsius. The same global index for every district. |
+| `district_area_km2`, `population_density_km2` | Equal-area polygon area including inland water; original WorldPop population divided by that area. |
+
+The expanded bundle contains the CSV, original boundaries and case flags, updated
+field definitions, `covariate_quality_flags.csv`, per-column coverage and ranges,
+and provenance including the original manifest and new response hashes. Missing
+values stay blank and receive an explicit quality flag. Vegetation and water
+values with less than full classified/good-quality coverage receive a separate
+`partial_spatial_coverage` flag; their coverage columns show how much was observed.
+This flags every partial observation without imposing an arbitrary acceptance threshold.
+The optional DHIS2 importer still imports only its
+original five variables; enrichment does not add DHIS2 metadata or exports.
+
+Use these as candidate covariates for retrospective research. Annual maps and
+same-month weather may not have been available when a forecast would have been
+issued. Select variables and lags within training folds. SPI/SPEI, seasonal
+forecast hindcasts and transmission-suitability indices are not included: each
+needs a separate, validated definition and reference period.
+
+Sources and attribution: [ERA5-Land monthly aggregates](https://developers.google.com/earth-engine/datasets/catalog/ECMWF_ERA5_LAND_MONTHLY_AGGR),
+[MOD13A3.061](https://doi.org/10.5067/MODIS/MOD13A3.061),
+[MCD12Q1.061](https://doi.org/10.5067/MODIS/MCD12Q1.061),
+[SRTM](https://doi.org/10.1029/2005RG000183),
+[JRC Global Surface Water and corrected history](https://global-surface-water.appspot.com/download)
+(Pekel et al., 2016, *High-resolution mapping of global surface water and its long-term changes*,
+[doi:10.1038/nature20584](https://doi.org/10.1038/nature20584)), and
+[NOAA CPC ERSSTv5](https://www.cpc.ncep.noaa.gov/data/indices/ersst5.nino.mth.91-20.ascii).
+Retain these references and the base bundle's source-specific licences.
+
 ## Readiness
 
 The case-map plugin runs without climate credentials and serves the published
